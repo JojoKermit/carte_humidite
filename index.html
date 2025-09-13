@@ -134,10 +134,12 @@
       loadImage(e.target.value);
     });
 
-    // Charger l'image initiale (première date dispo)
-    const firstDate = Object.keys(availableDates)[0];
-    dateSelect.value = firstDate;
-    loadImage(firstDate);
+    // Charger l'image initiale (dernière date dispo)
+const dates = Object.keys(availableDates);
+const lastDate = dates[dates.length - 1];
+dateSelect.value = lastDate;
+loadImage(lastDate);
+
 
     // Affichage du tooltip au survol du canvas
     canvas.addEventListener("mousemove", (e) => {
@@ -179,3 +181,4 @@
   </script>
 </body>
 </html>
+
