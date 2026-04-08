@@ -8,7 +8,6 @@
       font-family: sans-serif;
       margin: 15px 20px;
       padding: 0;
-      /* Pas d'overflow:hidden, on laisse le scroll vertical naturel */
       background: #fff;
       color: #222;
     }
@@ -30,7 +29,6 @@
       cursor: crosshair;
       display: block;
       margin-top: 10px;
-      /* taille fixe */
       width: 1150px;
       height: 860px;
     }
@@ -100,11 +98,16 @@
     };
 
     const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     const tooltip = document.getElementById("tooltip");
     const dateSelect = document.getElementById("dateSelect");
+    const visibleYStart = 290;
+    const img = new Image();
 
-    // Remplir le menu déroulant avec les dates dispo
+    // Nécessaire pour éviter les erreurs de sécurité (CORS) lors de la lecture des pixels
+    img.crossOrigin = "anonymous";
+
+    // 1. Remplir le menu déroulant
     for (const date of Object.keys(availableDates)) {
       const option = document.createElement("option");
       option.value = date;
@@ -112,57 +115,67 @@
       dateSelect.appendChild(option);
     }
 
-    // Image et date courante
-    const img = new Image();
-    // NE PAS utiliser crossOrigin ici, inutile en local et GitHub Pages
-
-    // Ligne pixel à partir de laquelle on affiche l'image (tronquée en haut)
-    const visibleYStart = 290;
-
+    // 2. Fonction de chargement d'image
     function loadImage(date) {
       const filename = availableDates[date];
       if (!filename) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        alert("Aucune carte disponible pour cette date.");
         return;
       }
+
+      // On définit l'action à faire quand l'image est chargée
       img.onload = () => {
-        // On dessine uniquement la partie de l'image de y=290 à y=290 + canvas.height
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, visibleYStart, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
       };
+
       img.onerror = () => {
-        alert("Erreur de chargement de l'image !");
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "red";
+        ctx.fillText("Erreur : Image non trouvée (" + filename + ")", 20, 50);
       };
+
       img.src = filename;
     }
 
-    // Au changement de date, charger la nouvelle image
+    // 3. Initialisation au chargement de la page
+    window.addEventListener('load', () => {
+      const dates = Object.keys(availableDates);
+      const lastDate = dates[dates.length - 1];
+      dateSelect.value = lastDate;
+      loadImage(lastDate);
+    });
+
+    // 4. Événement de changement de date
     dateSelect.addEventListener("change", (e) => {
       loadImage(e.target.value);
     });
 
-    // Charger l'image initiale (dernière date dispo)
-const dates = Object.keys(availableDates);
-const lastDate = dates[dates.length - 1];
-dateSelect.value = lastDate;
-loadImage(lastDate);
-
-
-    // Affichage du tooltip au survol du canvas
+    // 5. Gestion du Tooltip (lecture des couleurs)
     canvas.addEventListener("mousemove", (e) => {
       const rect = canvas.getBoundingClientRect();
       const x = Math.floor(e.clientX - rect.left);
       const y = Math.floor(e.clientY - rect.top);
 
-      const pixel = ctx.getImageData(x, y, 1, 1).data;
-      const [r, g, b] = [pixel[0], pixel[1], pixel[2]];
-      const humidity = getApproximateColorValue(r, g, b);
+      try {
+        const pixel = ctx.getImageData(x, y, 1, 1).data;
+        const [r, g, b, a] = [pixel[0], pixel[1], pixel[2], pixel[3]];
 
-      tooltip.style.left = `${e.pageX + 10}px`;
-      tooltip.style.top = `${e.pageY + 10}px`;
-      tooltip.innerHTML = `<strong>Humidité</strong>: ${humidity}`;
-      tooltip.style.display = "block";
+        // Si le pixel est transparent ou blanc (fond), on cache le tooltip
+        if (a === 0 || (r > 250 && g > 250 && b > 250)) {
+            tooltip.style.display = "none";
+            return;
+        }
+
+        const humidity = getApproximateColorValue(r, g, b);
+
+        tooltip.style.left = `${e.pageX + 15}px`;
+        tooltip.style.top = `${e.pageY + 15}px`;
+        tooltip.innerHTML = `<strong>Humidité</strong>: ${humidity}`;
+        tooltip.style.display = "block";
+      } catch (err) {
+        console.error("Erreur lecture pixels:", err);
+      }
     });
 
     canvas.addEventListener("mouseleave", () => {
@@ -184,16 +197,9 @@ loadImage(lastDate);
           closest = c;
         }
       }
-      return minDistance <= 20 ? closest.value : `Valeur inconnue (RGB ${r}, ${g}, ${b})`;
+      // Seuil de tolérance de 30 pour la reconnaissance des couleurs
+      return minDistance <= 30 ? closest.value : `Inconnue`;
     }
   </script>
 </body>
 </html>
-
-
-
-
-
-
-
-
